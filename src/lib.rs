@@ -4,7 +4,6 @@
 //! An OpenGL back-end for Rust-Graphics
 
 extern crate shader_version;
-extern crate shaders_graphics2d as shaders;
 extern crate image;
 extern crate gl;
 extern crate graphics;
@@ -25,4 +24,5 @@ pub type GlyphCache<'a> = graphics::glyph_cache::rusttype::GlyphCache<'a, (), Te
 
 mod back_end;
 mod texture;
+mod shaders;
 mod draw_state;

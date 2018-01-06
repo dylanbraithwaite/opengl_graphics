@@ -154,6 +154,7 @@ pub struct Textured {
     program: GLuint,
     vao: GLuint,
     color: GLint,
+    depth: GLint,
     pos: DynamicAttribute,
     uv: DynamicAttribute,
     pos_buffer: Vec<[f32; 2]>,
@@ -161,6 +162,7 @@ pub struct Textured {
     offset: usize,
     last_texture_id: GLuint,
     last_color: [f32; 4],
+    depth_val: f32,
 }
 
 impl Drop for Textured {
@@ -246,10 +248,16 @@ impl Textured {
         }
         let pos = DynamicAttribute::xy(program, "pos", vao).unwrap();
         let c_color = CString::new("color").unwrap();
+        let c_depth = CString::new("depth").unwrap();
         let color = unsafe { gl::GetUniformLocation(program, c_color.as_ptr()) };
+        let depth = unsafe { gl::GetUniformLocation(program, c_depth.as_ptr()) };
         drop(c_color);
+        drop(c_depth);
         if color == -1 {
             panic!("Could not find uniform `color`");
+        }
+        if depth == -1 {
+            panic!("Could not find uniform `depth`")
         }
         let uv = DynamicAttribute::uv(program, "uv", vao).unwrap();
         Ok(Textured {
@@ -259,12 +267,14 @@ impl Textured {
             program: program,
             pos: pos,
             color: color,
+            depth: depth,
             uv: uv,
             pos_buffer: vec![[0.0; 2]; CHUNKS * BUFFER_SIZE],
             uv_buffer: vec![[0.0; 2]; CHUNKS * BUFFER_SIZE],
             offset: 0,
             last_texture_id: 0,
             last_color: [0.0; 4],
+            depth_val: 1.0,
         })
     }
 
@@ -275,9 +285,12 @@ impl Textured {
             gl::BindVertexArray(self.vao);
             gl::BindTexture(gl::TEXTURE_2D, texture_id);
             gl::Uniform4f(self.color, color[0], color[1], color[2], color[3]);
+            gl::Uniform1f(self.depth, self.depth_val);
             // Render triangles whether they are facing
             // clockwise or counter clockwise.
             gl::Disable(gl::CULL_FACE);
+            gl::Enable(gl::DEPTH_TEST);
+            gl::DepthFunc(gl::LEQUAL);
             self.pos.set(&self.pos_buffer[..self.offset]);
             self.uv.set(&self.uv_buffer[..self.offset]);
             gl::DrawArrays(gl::TRIANGLES, 0, self.offset as i32);
@@ -306,6 +319,15 @@ pub struct GlGraphics {
 }
 
 impl<'a> GlGraphics {
+
+    /// Temporary workaround for z-sorting textured drawables.
+    pub fn set_depth(&mut self, depth: f32) {
+        if self.textured.depth_val != depth  && self.textured.offset > 0 {
+            self.textured.flush();
+        }
+        self.textured.depth_val = depth;
+    }
+
     /// Creates a new OpenGL back-end.
     ///
     /// # Panics
